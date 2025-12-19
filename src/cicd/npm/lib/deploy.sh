@@ -17,6 +17,6 @@ if [ -n "${AWS_S3_BUCKET}" ]; then
   aws s3 cp --recursive ${VERSION_DIR} ${CURRENT_DIR}
 fi
 if [ -n "${TARGET_CNAME}" ]; then
-  AWS_CLOUDFRONT_DISTRIBUTION_ID="$(aws cloudfront list-distributions --query "DistributionList.Items[?Aliases.Items[0] == '${TARGET_CNAME}'].Id" --output text)"
+  AWS_CLOUDFRONT_DISTRIBUTION_ID="$(aws cloudfront list-distributions --query "DistributionList.Items[?Aliases.Items && contains(Aliases.Items, '${TARGET_CNAME}')].Id" --output text)"
   aws cloudfront create-invalidation --distribution-id ${AWS_CLOUDFRONT_DISTRIBUTION_ID} --paths "/*"
 fi
