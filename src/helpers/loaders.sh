@@ -31,6 +31,7 @@ function load_deployment_variables() {
 #
 function load_color_variables() {
   BLUE='\033[0;34m'
+  GREEN='\033[0;32m'
   LIGHT_BLUE='\033[1;34m'
   LIGHT_GREEN='\033[1;32m'
   LIGHT_PURPLE='\033[1;35m'
