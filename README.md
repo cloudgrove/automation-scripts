@@ -52,7 +52,7 @@ lambda:
       source: src/main/functions/google-integration
 ```
 
-Resolver-set YAML entries require `type`, `field`, and `data_source`. A bare entry creates a standard unit resolver. An entry can deploy AppSync JavaScript from a path relative to the configured resolver directory by adding `runtime` and `code`:
+Resolver-set YAML files live under `.cloudgrove/appsync/resolvers/` and require `type`, `field`, and `data_source` for each entry. A bare entry creates a standard unit resolver. An entry can deploy AppSync JavaScript from a path relative to the project root by adding `code`. The optional `runtime` stanza defaults to `APPSYNC_JS` version `1.0.0`:
 
 ```yaml
 - type: Query
@@ -61,7 +61,7 @@ Resolver-set YAML entries require `type`, `field`, and `data_source`. A bare ent
   runtime:
     name: APPSYNC_JS
     version: 1.0.0
-  code: example.mjs
+  code: src/main/api/graphql/resolvers/example.mjs
 ```
 
 `push` copies selected Lambda ZIPs, the compiled GraphQL schema, resolver sets, and JavaScript resolver sources to the configured artifact buckets and

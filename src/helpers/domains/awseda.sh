@@ -111,10 +111,7 @@ function awseda_graphql_resolver_key() {
 }
 
 function awseda_graphql_resolver_dir() {
-  local configured_source
-
-  configured_source=$(awseda_query -r '.appsync.graphql.api.source')
-  echo "${PROJECT_DIR}/${configured_source}/resolvers"
+  echo "${PROJECT_DIR}/.cloudgrove/appsync/resolvers"
 }
 
 function awseda_graphql_changed() {
@@ -141,7 +138,7 @@ function awseda_graphql_changed() {
   config_path="${AWS_EDA_CONFIG_FILE#${PROJECT_DIR}/}"
   while IFS= read -r changed_path; do
     case "${changed_path}" in
-      "${configured_source}"|"${configured_source}"/*|src/package.json|src/package-lock.json|"${config_path}")
+      "${configured_source}"|"${configured_source}"/*|.cloudgrove/appsync/resolvers/*|src/package.json|src/package-lock.json|"${config_path}")
         return 0
         ;;
     esac
@@ -225,6 +222,8 @@ function awseda_push_graphql_artifacts() {
   fi
 
   local resolver_dir
+  local resolver_code
+  local resolver_code_path
   local resolver_file
   local resolver_key
   local schema_key
@@ -246,7 +245,17 @@ function awseda_push_graphql_artifacts() {
     resolver_key=$(awseda_graphql_resolver_key "${resolver_file}")
     echo " - Pushing resolver set to s3://${AWS_EDA_GRAPHQL_ARTIFACT_BUCKET}/${resolver_key}"
     aws s3 cp "${resolver_file}" "s3://${AWS_EDA_GRAPHQL_ARTIFACT_BUCKET}/${resolver_key}" --only-show-errors
-  done < <(find "${resolver_dir}" -type f \( -name '*.yml' -o -name '*.yaml' -o -name '*.js' -o -name '*.mjs' \) | sort)
+    while IFS= read -r resolver_code; do
+      resolver_code_path="${PROJECT_DIR}/${resolver_code}"
+      if [ ! -f "${resolver_code_path}" ]; then
+        echo "Missing resolver code referenced by $(basename "${resolver_file}"): ${resolver_code_path}" >&2
+        return 1
+      fi
+      resolver_key=$(awseda_graphql_resolver_key "${resolver_code_path}")
+      echo " - Pushing resolver code to s3://${AWS_EDA_GRAPHQL_ARTIFACT_BUCKET}/${resolver_key}"
+      aws s3 cp "${resolver_code_path}" "s3://${AWS_EDA_GRAPHQL_ARTIFACT_BUCKET}/${resolver_key}" --only-show-errors
+    done < <(yq -o=json '.' "${resolver_file}" | jq -r '.[].code // empty' | sort -u)
+  done < <(find "${resolver_dir}" -type f \( -name '*.yml' -o -name '*.yaml' \) | sort)
 }
 
 function awseda_deploy_functions() {
@@ -356,8 +365,8 @@ function awseda_deploy_graphql() {
       resolver_field=$(jq -r '.field' <<< "${resolver_json}")
       resolver_data_source=$(jq -r '.data_source' <<< "${resolver_json}")
       resolver_code=$(jq -r '.code // empty' <<< "${resolver_json}")
-      resolver_runtime_name=$(jq -r '.runtime.name // empty' <<< "${resolver_json}")
-      resolver_runtime_version=$(jq -r '.runtime.version // empty' <<< "${resolver_json}")
+      resolver_runtime_name=$(jq -r '.runtime.name // "APPSYNC_JS"' <<< "${resolver_json}")
+      resolver_runtime_version=$(jq -r '.runtime.version // "1.0.0"' <<< "${resolver_json}")
       resolver_args=(
         --api-id "${graphql_api_id}"
         --type-name "${resolver_type}"
@@ -366,11 +375,7 @@ function awseda_deploy_graphql() {
         --kind UNIT
       )
       if [ -n "${resolver_code}" ]; then
-        resolver_code_path="${resolver_dir}/${resolver_code}"
-        if [ -z "${resolver_runtime_name}" ] || [ -z "${resolver_runtime_version}" ]; then
-          echo "Resolver ${resolver_type}.${resolver_field} requires runtime.name and runtime.version when code is configured" >&2
-          return 1
-        fi
+        resolver_code_path="${PROJECT_DIR}/${resolver_code}"
         if [ ! -f "${resolver_code_path}" ]; then
           echo "Missing resolver code for ${resolver_type}.${resolver_field}: ${resolver_code_path}" >&2
           return 1
